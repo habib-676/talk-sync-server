@@ -65,7 +65,10 @@ async function run() {
     const messagesCollections = database.collection("messages");
     const announcementsCollection = database.collection("announcements");
     const sessionsCollections = database.collection("sessions");
+
+    // feedback collections
     const feedbackCollection = database.collection("feedbacks");
+    const evaluationsColl = database.collection("feedbackEvaluations");
 
     // Read Collection
     const booksCollections = database.collection("books");
@@ -872,6 +875,98 @@ async function run() {
         res.json({ success: true, data: list });
       } catch (err) {
         console.error("GET /feedbacks error:", err);
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+    // POST /feedbacks/evaluate — store evaluation of a feedback (marks for sender)
+    app.post("/feedbacks/evaluate", async (req, res) => {
+      try {
+        const {
+          feedbackId = null,
+          senderId,
+          receiverId,
+          words = [], // [{text, correct}]
+          sentences = [], // [{text, correct}]
+          breakdown = {},
+          totalMarks = 0,
+        } = req.body || {};
+
+        if (!senderId || !receiverId) {
+          return res.status(400).json({
+            success: false,
+            message: "senderId and receiverId are required",
+          });
+        }
+
+        const doc = {
+          feedbackId,
+          senderId,
+          receiverId,
+          words: Array.isArray(words) ? words : [],
+          sentences: Array.isArray(sentences) ? sentences : [],
+          breakdown:
+            typeof breakdown === "object" && breakdown ? breakdown : {},
+          totalMarks: Number.isFinite(totalMarks) ? Number(totalMarks) : 0,
+          createdAt: new Date().toISOString(),
+        };
+
+        const result = await evaluationsColl.insertOne(doc);
+
+        // Increment sender's points and evaluation/session count
+        const inc = Number.isFinite(totalMarks) ? Number(totalMarks) : 0;
+        await usersCollections.updateOne(
+          { uid: senderId },
+          { $inc: { points: inc, evaluationsCount: 1 } }
+        );
+
+        // Badge thresholds based on number of evaluations (considered completed sessions)
+        const updatedUser = await usersCollections.findOne(
+          { uid: senderId },
+          { projection: { evaluationsCount: 1, badges: 1 } }
+        );
+
+        const count = updatedUser?.evaluationsCount || 0;
+        const toAdd = [];
+        if (count >= 5) toAdd.push("bronze");
+        if (count >= 20) toAdd.push("silver");
+        if (count >= 50) toAdd.push("gold");
+
+        if (toAdd.length) {
+          await usersCollections.updateOne(
+            { uid: senderId },
+            { $addToSet: { badges: { $each: toAdd } } }
+          );
+        }
+
+        res.status(201).json({
+          success: true,
+          id: result.insertedId,
+          data: doc,
+          badgesUnlocked: toAdd || [],
+        });
+      } catch (err) {
+        console.error("POST /feedbacks/evaluate error:", err);
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+    // GET /feedbacks/evaluations — list evaluations (filter by feedbackId and/or pair)
+    app.get("/feedbacks/evaluations", async (req, res) => {
+      try {
+        const { feedbackId, senderId, receiverId } = req.query || {};
+        const q = {};
+        if (feedbackId) q.feedbackId = feedbackId;
+        if (senderId) q.senderId = senderId;
+        if (receiverId) q.receiverId = receiverId;
+
+        const list = await evaluationsColl
+          .find(q)
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.json({ success: true, data: list });
+      } catch (err) {
+        console.error("GET /feedbacks/evaluations error:", err);
         res.status(500).json({ success: false, message: err.message });
       }
     });
