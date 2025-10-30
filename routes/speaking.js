@@ -1,3 +1,5 @@
+
+
 const express = require("express");
 const router = express.Router();
 
@@ -19,9 +21,7 @@ const safeJson = (t, fallback) => {
     // try to extract first {...} block
     const m = t.match(/\{[\s\S]*\}$/m);
     if (m) {
-      try {
-        return JSON.parse(m[0]);
-      } catch {}
+      try { return JSON.parse(m[0]); } catch {}
     }
     return fallback;
   }
@@ -71,14 +71,7 @@ router.post("/assess", async (req, res) => {
       targetLanguage = "English",
       level = "A2",
       topic = "Daily life",
-      rubric = [
-        "pronunciation",
-        "fluency",
-        "grammar",
-        "vocabulary",
-        "detail",
-        "coherence",
-      ],
+      rubric = ["pronunciation", "fluency", "grammar", "vocabulary", "detail", "coherence"],
     } = req.body || {};
 
     if (!transcript || !transcript.trim()) {
@@ -129,31 +122,32 @@ ${transcript}
     const out = await chatModel.generateContent(prompt);
     const text = out.response.text().trim();
 
-    const data = safeJson(text, null) || {
-      scores: {
-        pronunciation: 3,
-        fluency: 3,
-        grammar: 3,
-        vocabulary: 3,
-        detail: 3,
-        coherence: 3,
-      },
-      summary: "Clear ideas with room to improve accuracy and flow.",
-      highlights: ["Clear message", "Relevant ideas"],
-      mistakes: [],
-      pronunciation_hints: [],
-      tips: {
-        pronunciation: "Slow down and stress key syllables.",
-        fluency: "Use linking phrases to maintain flow.",
-        grammar: "Check verb tense consistency.",
-        vocabulary: "Add one topic-specific word next time.",
-        detail: "Include a concrete example.",
-        coherence: "Use first/then/finally to structure.",
-      },
-      estimated_cefr: level,
-      spoken_feedback:
-        "Nice effort! Your ideas are clear. Try speaking slightly slower and add one example to support your point. Also review verb tenses. Keep practicing—you’re improving!",
-    };
+    const data =
+      safeJson(text, null) || {
+        scores: {
+          pronunciation: 3,
+          fluency: 3,
+          grammar: 3,
+          vocabulary: 3,
+          detail: 3,
+          coherence: 3,
+        },
+        summary: "Clear ideas with room to improve accuracy and flow.",
+        highlights: ["Clear message", "Relevant ideas"],
+        mistakes: [],
+        pronunciation_hints: [],
+        tips: {
+          pronunciation: "Slow down and stress key syllables.",
+          fluency: "Use linking phrases to maintain flow.",
+          grammar: "Check verb tense consistency.",
+          vocabulary: "Add one topic-specific word next time.",
+          detail: "Include a concrete example.",
+          coherence: "Use first/then/finally to structure.",
+        },
+        estimated_cefr: level,
+        spoken_feedback:
+          "Nice effort! Your ideas are clear. Try speaking slightly slower and add one example to support your point. Also review verb tenses. Keep practicing—you’re improving!",
+      };
 
     return res.json({ success: true, data });
   } catch (e) {
